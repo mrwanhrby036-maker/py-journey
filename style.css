@@ -507,3 +507,76 @@ button { font-family: inherit; cursor: pointer; }
   .hero--split .hero__content { text-align: center; }
   .hero__brand { justify-content: center; }
 }
+
+/* ============ Skeleton loading (شاشة تحميل هيكلية) ============ */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #e8ebf3;
+  border-radius: var(--radius-sm);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .75), transparent);
+  animation: skeleton-shimmer 1.4s infinite;
+}
+@keyframes skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+.skeleton--text { height: 14px; margin: 8px 0; }
+.skeleton--title { height: 22px; width: 60%; margin: 0 0 14px; }
+.skeleton--block { height: 72px; margin: 12px 0; }
+
+/* صورة تظهر عليها skeleton حتى يكتمل تحميلها */
+.skeleton-img {
+  position: relative;
+  border-radius: var(--radius);
+  background: #e8ebf3;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+.skeleton-img::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .75), transparent);
+  animation: skeleton-shimmer 1.4s infinite;
+}
+
+/* شاشة التحميل الأولى (boot) */
+.boot-skeleton {
+  min-height: 100vh;
+  padding: 28px 32px;
+  background: var(--bg);
+}
+.boot-skeleton__top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.boot-skeleton__logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.boot-skeleton__line { flex: 1; height: 16px; }
+.boot-skeleton__hero {
+  height: 180px;
+  border-radius: 16px;
+  margin-bottom: 26px;
+}
+.boot-skeleton__card {
+  height: 72px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after, .skeleton-img::after { animation: none; }
+}

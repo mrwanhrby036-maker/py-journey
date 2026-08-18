@@ -33,10 +33,9 @@ const App = (() => {
       return;
     }
 
-    // جدار تسجيل الدخول: كل الصفحات الأخرى تتطلب حسابًا مفعّلًا
+    // جدار تسجيل الدخول: كل الصفحات تتطلب حسابًا
     if (!Auth.isAuthenticated()) {
-      if (Auth.isPending()) renderPendingApproval();
-      else renderAuth("login");
+      renderAuth("login");
       closeSidebar();
       return;
     }
@@ -54,7 +53,6 @@ const App = (() => {
   }
 
   window.addEventListener("hashchange", () => navigate(location.hash));
-  window.addEventListener("DOMContentLoaded", () => navigate(location.hash || "#/home"));
 
   /* ================= الهيكل العام ================= */
   function shell(contentHtml, opts) {
@@ -356,9 +354,7 @@ const App = (() => {
           if (!name) { showError("فضلك اكتب اسمك."); return; }
           await Auth.signUp(name, email, password);
         }
-        // مستخدم مفعّل → الرئيسية؛ وإلا شاشة قيد المراجعة
-        if (Auth.isPending()) renderPendingApproval();
-        else location.hash = "#/home";
+        location.hash = "#/home";
       } catch (err) {
         showError(authErrorText(err));
       } finally {
@@ -375,13 +371,12 @@ const App = (() => {
           const res = await Auth.signInWithGoogle();
           if (res && res.redirected) {
             // سيُعاد توجيه المتصفح لصفحة Google وسيعود تلقائيًا بعد تسجيل الدخول
-            showError("جارٍ تحويلك إلى Google لتسجيل الدخول… ستُعاد للمنصة تلقائيًا بعد الموافقة.");
+            showError("جارٍ تحويلك إلى Google لتسجيل الدخول… ستُعاد للمنصة تلقائيًا.");
             errorEl.style.color = "var(--brand-ink)";
             errorEl.style.background = "var(--brand-soft)";
             return;
           }
-          if (Auth.isPending()) renderPendingApproval();
-          else location.hash = "#/home";
+          location.hash = "#/home";
         } catch (err) {
           showError(authErrorText(err));
         } finally {
@@ -409,39 +404,6 @@ const App = (() => {
         }
       });
     }
-  }
-
-  /* ================= شاشة "قيد المراجعة" ================= */
-  function renderPendingApproval() {
-    const p = Auth.getPending();
-    const name = (p && p.name) ? p.name : "";
-    root.innerHTML = `
-      <div class="auth-page">
-        <div class="auth-card" style="text-align:center">
-          <div class="auth-brand">
-            <img src="logo-compass-clear.png" alt="شعار PyJourney" />
-            <span class="auth-brand__name">PyJourney</span>
-          </div>
-          <div class="pending-icon">${Icons.lock}</div>
-          <h1 class="auth-title">حسابك قيد المراجعة</h1>
-          <p class="auth-sub">${name ? "أهلًا " + esc(name) + "، " : ""}أنشأت حسابك بنجاح. حسابك ينتظر موافقة المشرف لتفعيله — عادةً يُفعَّل خلال وقت قصير.</p>
-          <div class="pending-actions">
-            <button class="btn btn--primary" id="pending-retry" type="button">${Icons.refresh} تحقق من التفعيل الآن</button>
-            <button class="btn" id="pending-logout" type="button">${Icons.logout} تسجيل الخروج</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    root.querySelector("#pending-retry").addEventListener("click", async () => {
-      await Auth.recheck();
-      if (Auth.isAuthenticated()) location.hash = "#/home";
-      else renderPendingApproval();
-    });
-    root.querySelector("#pending-logout").addEventListener("click", async () => {
-      await Auth.signOut();
-      location.hash = "#/login";
-    });
   }
 
   /* ================= الصفحة الرئيسية ================= */
@@ -1285,10 +1247,51 @@ const App = (() => {
     });
   }
 
+  /* ================= شاشة التحميل الأولى (Skeleton) ================= */
+  function renderBootSkeleton() {
+    root.innerHTML = `
+      <div class="boot-skeleton" aria-busy="true" aria-label="جارٍ تحميل المنصة">
+        <div class="boot-skeleton__top">
+          <div class="skeleton boot-skeleton__logo"></div>
+          <div class="skeleton skeleton--text boot-skeleton__line"></div>
+        </div>
+        <div class="skeleton boot-skeleton__hero"></div>
+        <div class="skeleton boot-skeleton__card"></div>
+        <div class="skeleton boot-skeleton__card"></div>
+        <div class="skeleton boot-skeleton__card" style="width:70%"></div>
+      </div>`;
+  }
+
+  // إظهار الصورة وإخفاء الـ skeleton بعد اكتمال تحميلها (حدث لا ينتشر، فنستخدم مرحلة الالتقاط)
+  function onImageLoaded(e) {
+    const img = e.target;
+    if (img && img.getAttribute && img.getAttribute("data-img") !== null) {
+      const skel = img.parentElement ? img.parentElement.querySelector("[data-img-skeleton]") : null;
+      if (skel) skel.remove();
+      img.style.display = "";
+    }
+  }
+
+  // عند فشل تحميل صورة: أزل الـ skeleton حتى لا يبقى معلّقًا
+  function onImageError(e) {
+    const img = e.target;
+    if (img && img.getAttribute && img.getAttribute("data-img") !== null) {
+      const skel = img.parentElement ? img.parentElement.querySelector("[data-img-skeleton]") : null;
+      if (skel) skel.remove();
+      img.style.display = "";
+    }
+  }
+
   /* ================= بدء التشغيل ================= */
   function init() {
+    // معالجا تحميل/خطأ الصور (مرة واحدة)
+    document.addEventListener("load", onImageLoaded, true);
+    document.addEventListener("error", onImageError, true);
+
     // ربط مزامنة التقدم بالسحابة (إن كان Firebase مفعّلًا)
     Auth.hookProgressSync();
+    // اعرض هيكلًا للتحميل فورًا حتى تكتمل تهيئة المصادقة
+    renderBootSkeleton();
     // انتظر تهيئة المصادقة ثم وجّه المستخدم
     Auth.init().then(() => {
       if (!location.hash) location.hash = "#/home";

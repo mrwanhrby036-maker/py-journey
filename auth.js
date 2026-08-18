@@ -3,18 +3,19 @@
    ----------------------------------------------------------------
    يدير تسجيل الدخول وإنشاء الحساب وتسجيل الخروج، مع مزامنة التقدم إلى السحابة.
 
-   يعمل على Firebase Realtime Database (بنية متوافقة مع مشروعك):
-   - users/{uid}: { email, name, phone, isAdmin, approved, createdAt, progress }
-   - adminNotifications: إشعار للمشرف عند كل تسجيل جديد.
-   - deletedEmails: قائمة بريد محظورة (المستخدم المحذوف لا يعيد التسجيل).
+   يعمل على Firebase Realtime Database:
+   - users/{uid}: { email, name, phone, createdAt, progress }
 
-   نظام الموافقة:
-   - عند إنشاء حساب جديد: approved = false → ينتظر موافقة المشرف.
-   - عند تسجيل الدخول: إن لم يكن مفعّلًا يبقى في شاشة "قيد المراجعة".
+   التسجيل مفتوح: أي مستخدم ينشئ حسابًا يدخل فورًا — لا يوجد انتظار موافقة.
 
    وضعان:
    1) وضع Firebase (عند توفر بيانات FirebaseConfig + تحميل الـ SDK).
    2) الوضع المحلي (بدون إنترنت / بيانات ناقصة — للمعاينة فقط).
+
+   ملاحظة أمان:
+   - لا توجد أي وسيلة لترقية النفس إلى مشرف من داخل المنصة؛
+     حقل isAdmin لا يمكن كتابته إلا عبر Firebase Console مباشرة،
+     وقواعد الأمان تمنع أي مستخدم عادي من تعديله.
    ========================================================================== */
 
 const Auth = (() => {
@@ -22,23 +23,15 @@ const Auth = (() => {
   const SESSION_KEY = "pyjourney-session";
 
   let mode = "local"; // local | firebase
-  let current = null;   // المستخدم المفعّل فقط
-  let pending = null;   // { email, name } لمستخدم مسجّل لكنه بانتظار التفعيل
+  let current = null; // { uid, email, displayName, isAdmin, mode }
   let fb = null;
   let firebaseAuth = null;
   let db = null;
   const listeners = [];
 
-  // آلية انتظار استقرار حالة المصادقة (بعد قراءة قاعدة البيانات)
-  let settleResolvers = [];
-  function waitForAuthSettle() {
-    return new Promise((res) => settleResolvers.push(res));
-  }
-  function signalSettled() {
-    const rs = settleResolvers;
-    settleResolvers = [];
-    rs.forEach((r) => r());
-  }
+  // يُحَل عند أول استجابة من onAuthStateChanged (لاستقرار الحالة عند بدء التشغيل)
+  let firstAuthResolve = null;
+  const firstAuthDone = new Promise((r) => { firstAuthResolve = r; });
 
   /* ================= وضع Firebase ================= */
   function initFirebase() {
@@ -56,42 +49,31 @@ const Auth = (() => {
         await applyUserState(user);
       } else {
         current = null;
-        pending = null;
         notify();
       }
-      signalSettled();
+      if (firstAuthResolve) {
+        firstAuthResolve();
+        firstAuthResolve = null;
+      }
     });
   }
 
-  // قراءة سجل المستخدم وتحديد حالته (مفعّل / قيد المراجعة)
+  // قراءة سجل المستخدم وتفعيله (أي مستخدم مصادَق يدخل فورًا)
   async function applyUserState(user) {
     try {
       const snap = await db.ref("users/" + user.uid).once("value");
-      if (snap.exists()) {
-        const d = snap.val();
-        if (d.approved === false && d.isAdmin !== true) {
-          current = null;
-          pending = { email: user.email, name: d.name || "" };
-        } else {
-          current = {
-            uid: user.uid,
-            email: user.email,
-            displayName: d.name || user.email,
-            isAdmin: d.isAdmin === true,
-            mode: "firebase",
-          };
-          pending = null;
-          await pullProgress(user.uid);
-        }
-      } else {
-        // لا يوجد سجل (حالة نادرة) → اعتباره قيد المراجعة
-        current = null;
-        pending = { email: user.email, name: "" };
-      }
+      const d = snap.exists() ? snap.val() : {};
+      current = {
+        uid: user.uid,
+        email: user.email,
+        displayName: d.name || user.email,
+        isAdmin: d.isAdmin === true,
+        mode: "firebase",
+      };
+      await pullProgress(user.uid);
     } catch (e) {
       console.warn("applyUserState:", e);
       current = null;
-      pending = null;
     }
     notify();
   }
@@ -121,9 +103,26 @@ const Auth = (() => {
     }, 600);
   }
 
-  /* ================= الوضع المحلي (للمعاينة) ================= */
-  function hash(s) {
+  /* ================= الوضع المحلي (للمعاينة فقط) ================= */
+  // تجزئة كلمة المرور: SHA-256 مُملّح عبر Web Crypto (آمنة قدر الإمكان محليًا)
+  function randomSalt() {
+    const arr = new Uint8Array(16);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(arr);
+    else for (let i = 0; i < 16; i++) arr[i] = Math.floor(Math.random() * 256);
+    return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  async function hashPassword(password, salt) {
+    try {
+      if (window.crypto && crypto.subtle) {
+        const data = new TextEncoder().encode(salt + "::" + password);
+        const buf = await crypto.subtle.digest("SHA-256", data);
+        return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+      }
+    } catch (e) { /* fallback أدناه */ }
+    // احتياط (بيئة غير آمنة): تجزئة بسيطة — للطوارئ فقط
     let h = 5381;
+    const s = salt + "::" + password;
     for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
     return "h" + h.toString(36);
   }
@@ -136,33 +135,35 @@ const Auth = (() => {
 
   function setSession(u) {
     current = u;
-    pending = null;
     localStorage.setItem(SESSION_KEY, JSON.stringify(u));
     notify();
   }
 
-  function localSignUp(name, email, password) {
+  async function localSignUp(name, email, password) {
     const users = localUsers();
     if (users[email]) throw new Error("هذا البريد مسجّل مسبقًا. سجّل الدخول بدلًا من ذلك.");
+    const salt = randomSalt();
+    const passwordHash = await hashPassword(password, salt);
     const uid = "local-" + Date.now().toString(36);
-    users[email] = { uid, name, email, passwordHash: hash(password), createdAt: Date.now() };
+    users[email] = { uid, name, email, salt, passwordHash, createdAt: Date.now() };
     saveLocalUsers(users);
     setSession({ uid, email, displayName: name, mode: "local" });
-    return { user: current, pending: null };
+    return current;
   }
 
-  function localSignIn(email, password) {
+  async function localSignIn(email, password) {
     const u = localUsers()[email];
-    if (!u || u.passwordHash !== hash(password)) {
+    if (!u) throw new Error("البريد أو كلمة المرور غير صحيحة.");
+    const h = await hashPassword(password, u.salt || "");
+    if (h !== u.passwordHash) {
       throw new Error("البريد أو كلمة المرور غير صحيحة.");
     }
     setSession({ uid: u.uid, email: u.email, displayName: u.name, mode: "local" });
-    return { user: current, pending: null };
+    return current;
   }
 
   function localSignOut() {
     current = null;
-    pending = null;
     localStorage.removeItem(SESSION_KEY);
     notify();
   }
@@ -173,8 +174,7 @@ const Auth = (() => {
       try {
         initFirebase();
         mode = "firebase";
-        const p = waitForAuthSettle();
-        await Promise.race([p, new Promise((r) => setTimeout(r, 6000))]);
+        await Promise.race([firstAuthDone, new Promise((r) => setTimeout(r, 6000))]);
         return mode;
       } catch (e) {
         console.warn("تعذّر تهيئة Firebase — التبديل للوضع المحلي.", e);
@@ -191,59 +191,32 @@ const Auth = (() => {
 
   /* ================= واجهة عامة ================= */
   function isAuthenticated() { return !!current; }
-  function isPending() { return !!pending; }
   function currentUser() { return current; }
-  function getPending() { return pending; }
   function getMode() { return mode; }
   function onAuthChange(cb) { listeners.push(cb); }
   function notify() { listeners.forEach((cb) => { try { cb(current); } catch (e) {} }); }
 
   async function signUp(name, email, password) {
     if (mode === "firebase") {
-      // منع البريد المحذوف سابقًا
-      const emailKey = email.replace(/\./g, "_");
-      const delSnap = await db.ref("deletedEmails/" + emailKey).once("value");
-      if (delSnap.exists()) {
-        throw new Error("هذا البريد محظور من التسجيل. استخدم بريدًا آخر.");
-      }
-
       const cred = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+      // نكتب فقط الحقول المسموح بها (بدون isAdmin — لا يمكن لأحد تعيينه من العميل)
       await db.ref("users/" + cred.user.uid).set({
         email: email,
         name: name,
         phone: "",
-        isAdmin: false,
-        approved: false,
         createdAt: new Date().toISOString(),
       });
-
-      // إشعار المشرف بحساب جديد
-      const notifRef = db.ref("adminNotifications").push();
-      await notifRef.set({
-        id: notifRef.key,
-        userId: cred.user.uid,
-        userName: name,
-        userEmail: email,
-        userPhone: "",
-        registeredAt: new Date().toISOString(),
-        read: false,
-        type: "new_user",
-      });
-
-      // انتظر استقرار الحالة (سيكون قيد المراجعة)
-      const p = waitForAuthSettle();
-      await p;
-      return { user: current, pending };
+      await applyUserState(cred.user);
+      return current;
     }
     return localSignUp(name, email, password);
   }
 
   async function signIn(email, password) {
     if (mode === "firebase") {
-      const p = waitForAuthSettle();
-      await firebaseAuth.signInWithEmailAndPassword(email, password);
-      await p;
-      return { user: current, pending };
+      const uc = await firebaseAuth.signInWithEmailAndPassword(email, password);
+      await applyUserState(uc.user);
+      return current;
     }
     return localSignIn(email, password);
   }
@@ -253,19 +226,18 @@ const Auth = (() => {
       throw new Error("تسجيل الدخول عبر Google يتطلب ربط بيانات Firebase.");
     }
     const provider = new fb.auth.GoogleAuthProvider();
-    const p = waitForAuthSettle();
     try {
-      await firebaseAuth.signInWithPopup(provider);
+      const res = await firebaseAuth.signInWithPopup(provider);
+      await applyUserState(res.user);
+      return { user: current };
     } catch (e) {
       // المتصفح منع النافذة المنبثقة → جرّب إعادة التوجيه (لا تحتاج Popup)
       if (e && (e.code === "auth/popup-blocked" || e.code === "auth/cancelled-popup-request")) {
         await firebaseAuth.signInWithRedirect(provider);
-        return { user: null, pending: null, redirected: true };
+        return { user: null, redirected: true };
       }
       throw e;
     }
-    await p;
-    return { user: current, pending };
   }
 
   async function resetPassword(email) {
@@ -281,22 +253,6 @@ const Auth = (() => {
     else localSignOut();
   }
 
-  // إعادة فحص حالة التفعيل (لزر "تحقق الآن" في شاشة قيد المراجعة)
-  async function recheck() {
-    if (mode !== "firebase") return;
-    const u = firebaseAuth.currentUser;
-    if (u) await applyUserState(u);
-  }
-
-  // ترقية الحساب الحالي إلى مشرف (أداة إعداد أولي للمالك)
-  async function promoteSelf() {
-    if (mode !== "firebase") throw new Error("غير متاح في الوضع المحلي.");
-    const u = firebaseAuth.currentUser;
-    if (!u) throw new Error("سجّل الدخول أولًا.");
-    await db.ref("users/" + u.uid).update({ isAdmin: true, approved: true });
-    await recheck();
-  }
-
   function hookProgressSync() {
     Progress.onSave(() => {
       if (mode === "firebase" && current) pushProgress(current.uid);
@@ -304,12 +260,10 @@ const Auth = (() => {
   }
 
   return {
-    init, isAuthenticated, isPending, currentUser, getPending, getMode, onAuthChange,
-    signUp, signIn, signInWithGoogle, resetPassword, signOut, recheck, promoteSelf,
+    init, isAuthenticated, currentUser, getMode, onAuthChange,
+    signUp, signIn, signInWithGoogle, resetPassword, signOut,
     hookProgressSync,
   };
 })();
 
 window.Auth = Auth;
-// أداة إعداد أولي: تُستخدم من الكونسول لترقية حسابك إلى مشرف (مرة واحدة)
-window.makeMeAdmin = () => Auth.promoteSelf();

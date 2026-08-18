@@ -145,28 +145,6 @@
   font-size: .9rem;
   color: var(--ink-2);
 }
-
-/* ============ شاشة "قيد المراجعة" ============ */
-.pending-icon {
-  width: 64px;
-  height: 64px;
-  margin: 6px auto 16px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--warn);
-  background: var(--warn-soft);
-  border: 1px solid transparent;
-}
-.pending-icon svg { width: 30px; height: 30px; }
-
-.pending-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 8px;
-}
-.pending-actions .btn { justify-content: center; }
 .linklike {
   background: none;
   border: none;

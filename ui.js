@@ -79,9 +79,8 @@ function visualHtml(v) {
         <span class="index-cell__i">${esc(c.i)}</span>${esc(c.v)}
       </div>`).join("");
     body = `<div class="index-row">${cells}</div>`;
-  } else if (v.kind === "raw") {
-    body = v.data.html;
   }
+  // ملاحظة: لا نستخدم أي نوع "raw" يحقن HTML مباشرة (منعًا لثغرات XSS).
   return `<div class="visual"><div class="visual__head">${esc(v.title || "رسم توضيحي")}</div><div class="visual__body">${body}</div></div>`;
 }
 
@@ -106,7 +105,8 @@ function renderContentBlock(block) {
       return `<div class="lesson-block">${visualHtml(block)}</div>`;
     case "image":
       return `<figure class="lesson-figure">
-        <img src="${esc(block.src)}" alt="${esc(block.alt || "")}" loading="lazy" />
+        <div class="skeleton-img" data-img-skeleton></div>
+        <img src="${esc(block.src)}" alt="${esc(block.alt || "")}" style="display:none" data-img />
         ${block.caption ? `<figcaption>${esc(block.caption)}</figcaption>` : ""}
       </figure>`;
     default:
