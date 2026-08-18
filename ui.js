@@ -30,11 +30,22 @@ function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/* ---------- صورة الشخصية ---------- */
-function avatarHtml(charId) {
+/* ---------- التعبيرات المتاحة لكل شخصية ---------- */
+const CHARACTER_EMOTIONS = [
+  "neutral", "happy", "excited", "surprised", "thinking",
+  "confused", "sad", "angry", "proud", "encouraging",
+];
+
+/* ---------- صورة الشخصية (مع تعبيرها + أنيميشن) ---------- */
+function avatarHtml(charId, emotion) {
   const ch = Curriculum.characters[charId];
   if (!ch) return "";
-  return `<div class="avatar avatar--${ch.color}" aria-hidden="true">${esc(ch.name[0])}</div>`;
+  const em = (emotion && CHARACTER_EMOTIONS.indexOf(emotion) !== -1) ? emotion : "neutral";
+  return `
+    <div class="avatar avatar--img avatar--${ch.color}" aria-hidden="true">
+      <span class="avatar__letter">${esc(ch.name[0])}</span>
+      <img src="characters/${charId}-${em}.png" alt="" onerror="this.remove()" />
+    </div>`;
 }
 
 /* ---------- كتلة حوار ---------- */
@@ -43,7 +54,7 @@ function dialogueHtml(d) {
   if (!ch) return `<p>${esc(d.text)}</p>`;
   return `
     <div class="character-row">
-      ${avatarHtml(d.who)}
+      ${avatarHtml(d.who, d.emotion)}
       <div class="speech">
         <p class="speech__name">${esc(ch.name)} — ${esc(ch.role)}</p>
         <p>${esc(d.text)}</p>
