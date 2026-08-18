@@ -44,7 +44,7 @@ function avatarHtml(charId, emotion) {
   return `
     <div class="avatar avatar--img avatar--${ch.color}" aria-hidden="true">
       <span class="avatar__letter">${esc(ch.name[0])}</span>
-      <img src="characters/${charId}-${em}.png" alt="" onerror="this.remove()" />
+      <img src="${charId}-${em}.png" alt="" onerror="this.remove()" />
     </div>`;
 }
 
