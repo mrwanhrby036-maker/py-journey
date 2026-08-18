@@ -1,0 +1,156 @@
+/* ==========================================================================
+   PyJourney — Code Editor & Output Styles
+   ========================================================================== */
+
+.editor-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  margin: 18px 0;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.editor-toolbar__title {
+  font-weight: 700;
+  font-size: .8rem;
+  color: var(--ink-2);
+  margin-inline-end: 6px;
+}
+.editor-toolbar .spacer { flex: 1; }
+
+.editor-toolbar .btn {
+  padding: 5px 12px;
+  font-size: .82rem;
+  border-radius: 7px;
+}
+
+/* منطقة الكود — LTR دائمًا */
+.code-area {
+  position: relative;
+  display: flex;
+  direction: ltr;
+  background: #1b2233;
+  font-family: var(--mono);
+  min-height: 140px;
+}
+
+.line-numbers {
+  padding: 14px 10px;
+  text-align: right;
+  color: #5a6478;
+  user-select: none;
+  font-size: .88rem;
+  line-height: 1.6;
+  background: #171d2b;
+  border-right: 1px solid #2a3247;
+  white-space: pre;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.code-input {
+  flex: 1;
+  margin: 0;
+  padding: 14px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: #e6e9f2;
+  font-family: var(--mono);
+  font-size: .88rem;
+  line-height: 1.6;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 4;
+  caret-color: #9ab0ff;
+  min-height: 140px;
+}
+
+.code-input::placeholder { color: #5a6478; }
+
+/* منطقة النتيجة */
+.output-panel {
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.output-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  background: var(--surface-2);
+}
+.output-panel__head .spacer { flex: 1; }
+.output-clear { border: none; background: none; color: var(--ink-3); font-size: .78rem; padding: 2px 6px; }
+.output-clear:hover { color: var(--ink); }
+
+.output-body {
+  min-height: 60px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px 16px;
+  font-family: var(--mono);
+  direction: ltr;
+  text-align: left;
+  white-space: pre-wrap;
+  font-size: .88rem;
+  color: var(--ink);
+  background: #fbfcfe;
+}
+
+.output-body:empty::before {
+  content: "الناتج سيظهر هنا بعد الضغط على تشغيل…";
+  color: var(--ink-3);
+  font-family: var(--font);
+  direction: rtl;
+}
+
+.output-body--error { color: var(--danger); background: #fff7f7; }
+
+/* رسالة الخطأ المفسّرة */
+.error-explain {
+  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+.error-explain__title {
+  font-weight: 800;
+  color: var(--danger);
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.error-explain__row { margin: 4px 0; font-size: .92rem; }
+.error-explain__row strong { color: var(--ink); }
+
+.error-explain .btn { margin-top: 10px; }
+
+/* شريط الحالة أسفل المحرر */
+.editor-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  font-size: .75rem;
+  color: var(--ink-3);
+  border-top: 1px solid var(--line);
+}
+.editor-status .spacer { flex: 1; }
